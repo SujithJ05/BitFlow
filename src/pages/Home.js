@@ -50,7 +50,7 @@ const Home = () => {
             placeholder="ROOM ID"
             onChange={(e) => setRoomId(e.target.value)}
             value={roomId}
-            onKeyUp={handleInputEnter}
+            onKeyDown={handleInputEnter}
           />
           <input
             type="text"
@@ -58,24 +58,21 @@ const Home = () => {
             placeholder="USERNAME"
             onChange={(e) => setUsername(e.target.value)}
             value={username}
-            onKeyUp={handleInputEnter}
+            onKeyDown={handleInputEnter}
           />
           <button className="btn joinBtn" onClick={joinRoom}>
             Join
           </button>
           <span className="createInfo">
             If you don't have an invite then create &nbsp;
-            <a onClick={createNewRoom} href="" className="createNewBtn">
+            <button onClick={createNewRoom} className="createNewBtn">
               new room
-            </a>
+            </button>
           </span>
         </div>
       </div>
       <footer>
-        <h4>
-          Built with 💛 &nbsp; by &nbsp;
-          <a href="https://github.com/sandeepmegharaj">TechIdiots</a>
-        </h4>
+        <h4>Built for fun</h4>
       </footer>
     </div>
   );

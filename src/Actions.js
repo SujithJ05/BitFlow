@@ -11,6 +11,10 @@ const ACTIONS = {
   FILES_SYNC: "files-sync",
   FILE_RENAME: "file-rename", // <- ADD THIS LINE
   ACTIVE_FILE_CHANGE: "active-file-change",
+  CODE_RUN: "code-run",
+  CURSOR_MOVE: "cursor-move",
+  SEND_MESSAGE: "send-message",
+  RECEIVE_MESSAGE: "receive-message",
 };
 
 module.exports = ACTIONS;

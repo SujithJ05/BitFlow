@@ -14,101 +14,125 @@ const FileSidebar = ({
     y: 0,
     file: null,
   });
+  const [expandedFolders, setExpandedFolders] = useState({ "/": true });
   const sidebarRef = useRef(null);
 
-  // This effect handles closing the menu if you click outside of it
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      // A small timeout helps prevent race conditions with the menu opening
-      setTimeout(() => {
-        if (menuData.visible) {
-          setMenuData({ visible: false, x: 0, y: 0, file: null });
-        }
-      }, 100);
+    const handleClickOutside = () => {
+      if (menuData.visible) {
+        setMenuData({ visible: false, x: 0, y: 0, file: null });
+      }
     };
     document.addEventListener("click", handleClickOutside);
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-    };
+    return () => document.removeEventListener("click", handleClickOutside);
   }, [menuData.visible]);
 
-  const handleNewFile = () => {
-    const fileName = prompt("Enter new file name (e.g., styles.css):");
-    if (fileName && fileName.trim() !== "") {
-      onNewFile(fileName.trim());
-    }
-  };
-
-  const handleMenuClick = (e, fileName) => {
-    e.stopPropagation(); // Stop the click from closing the menu immediately
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuData({
-      visible: true,
-      // Position menu below and to the left of the "dots" button
-      x: rect.left - 80, // 80 is approx menu width minus button width
-      y: rect.top + rect.height,
-      file: fileName,
+  // Convert flat file list to a tree structure
+  const buildFileTree = (fileList) => {
+    const root = { name: "root", type: "folder", children: {}, path: "" };
+    fileList.forEach((filePath) => {
+      const parts = filePath.split("/");
+      let current = root;
+      parts.forEach((part, index) => {
+        if (index === parts.length - 1) {
+          current.children[part] = { name: part, type: "file", path: filePath };
+        } else {
+          if (!current.children[part]) {
+            current.children[part] = {
+              name: part,
+              type: "folder",
+              children: {},
+              path: parts.slice(0, index + 1).join("/"),
+            };
+          }
+          current = current.children[part];
+        }
+      });
     });
+    return root;
   };
 
-  const handleRename = (file) => {
-    const newFileName = prompt(`Enter new name for ${file}:`, file);
-    if (newFileName && newFileName.trim() !== "" && newFileName !== file) {
-      onFileRename(file, newFileName.trim());
-    }
-    setMenuData({ visible: false, x: 0, y: 0, file: null }); // Close menu
+  const toggleFolder = (path, e) => {
+    e.stopPropagation();
+    setExpandedFolders((prev) => ({ ...prev, [path]: !prev[path] }));
   };
 
-  const handleDelete = (file) => {
-    if (window.confirm(`Are you sure you want to delete ${file}?`)) {
-      onFileDelete(file);
+  const handleNewItem = (isFolder) => {
+    const name = prompt(`Enter new ${isFolder ? "folder" : "file"} name (use / for paths):`);
+    if (name && name.trim() !== "") {
+      const path = name.trim();
+      // If it's a folder, we create a placeholder file to keep it in the list
+      // Or just let the user type 'folder/file.js'
+      onNewFile(isFolder ? `${path}/.keep` : path);
     }
-    setMenuData({ visible: false, x: 0, y: 0, file: null }); // Close menu
   };
+
+  const renderTree = (node) => {
+    const sortedChildren = Object.values(node.children).sort((a, b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name);
+      return a.type === "folder" ? -1 : 1;
+    });
+
+    return (
+      <ul className="fileTreeList">
+        {sortedChildren.map((item) => {
+          if (item.name === ".keep") return null;
+          const isExpanded = expandedFolders[item.path];
+          
+          return (
+            <li key={item.path} className="treeItem">
+              <div 
+                className={`treeLabel ${item.type} ${item.path === activeFile ? "active" : ""}`}
+                onClick={() => item.type === "file" ? onFileSelect(item.path) : toggleFolder(item.path, { stopPropagation: () => {} })}
+              >
+                <span className="treeIcon" onClick={(e) => item.type === "folder" && toggleFolder(item.path, e)}>
+                  {item.type === "folder" ? (isExpanded ? "📂" : "📁") : "📄"}
+                </span>
+                <span className="itemName">{item.name}</span>
+                <button
+                  className="btn menuButton"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setMenuData({ visible: true, x: rect.left - 80, y: rect.top + 20, file: item.path });
+                  }}
+                >
+                  ⋮
+                </button>
+              </div>
+              {item.type === "folder" && isExpanded && renderTree(item)}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
+  const tree = buildFileTree(files);
 
   return (
-    <>
-      {" "}
-      {/* Use a React Fragment to render menu outside the normal flow */}
-      <div className="fileManager" ref={sidebarRef}>
-        <h3 className="fileManagerTitle">File Manager</h3>
-        <ul className="fileList">
-          {files.map((file) => (
-            <li
-              key={file}
-              className={`fileItem ${file === activeFile ? "active" : ""}`}
-              onClick={() => onFileSelect(file)}
-            >
-              <span className="fileName">{file}</span>
-              <button
-                className="btn menuButton"
-                onClick={(e) => handleMenuClick(e, file)}
-              >
-                ⋮
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button className="btn newFileBtn" onClick={handleNewFile}>
-          + New File
-        </button>
+    <div className="fileManager" ref={sidebarRef}>
+      <div className="fileManagerHeader">
+        <h3 className="fileManagerTitle">Explorer</h3>
+        <div className="fileActions">
+          <button onClick={() => handleNewItem(false)} title="New File">📄+</button>
+          <button onClick={() => handleNewItem(true)} title="New Folder">📁+</button>
+        </div>
       </div>
-      {/* The single, floating menu */}
+      <div className="treeContainer">
+        {renderTree(tree)}
+      </div>
+
       {menuData.visible && (
         <div
           className="fileMenu"
           style={{ top: `${menuData.y}px`, left: `${menuData.x}px` }}
         >
-          <button onClick={() => handleRename(menuData.file)}>Rename</button>
-          <button
-            className="deleteOption"
-            onClick={() => handleDelete(menuData.file)}
-          >
-            Delete
-          </button>
+          <button onClick={() => onFileRename(menuData.file, prompt("New name:", menuData.file))}>Rename</button>
+          <button className="deleteOption" onClick={() => onFileDelete(menuData.file)}>Delete</button>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

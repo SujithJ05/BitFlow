@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import ACTIONS from "../Actions";
 import Client from "../components/Client";
 import Editor from "../components/Editor";
 import FileSidebar from "../components/FileSidebar";
+import Chat from "../components/Chat";
 import { initSocket } from "../socket";
 import {
   useLocation,
@@ -21,18 +22,26 @@ const EditorPage = () => {
   const [clients, setClients] = useState([]);
   const [files, setFiles] = useState({});
   const [activeFile, setActiveFile] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [output, setOutput] = useState("");
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [otherCursors, setOtherCursors] = useState({});
+  const [showChat, setShowChat] = useState(false);
+  const saveTimeoutRef = useRef(null);
 
   useEffect(() => {
     const init = async () => {
       socketRef.current = await initSocket();
-      socketRef.current.on("connect_error", (err) => handleErrors(err));
-      socketRef.current.on("connect_failed", (err) => handleErrors(err));
 
-      function handleErrors(e) {
+      const handleErrors = (e) => {
         console.log("socket error", e);
         toast.error("Socket connection failed, try again later.");
         reactNavigator("/");
-      }
+      };
+
+      socketRef.current.on("connect_error", (err) => handleErrors(err));
+      socketRef.current.on("connect_failed", (err) => handleErrors(err));
 
       socketRef.current.emit(ACTIONS.JOIN, {
         roomId,
@@ -45,24 +54,51 @@ const EditorPage = () => {
         }
         setClients(clients);
       });
-      socketRef.current.on(ACTIONS.FILES_SYNC, ({ files, activeFile }) => {
+
+      socketRef.current.on(ACTIONS.FILES_SYNC, ({ files, activeFile: serverActiveFile, messages: history }) => {
         setFiles(files);
-        setActiveFile(activeFile || Object.keys(files)[0] || "");
+        if (history) setMessages(history);
+        setActiveFile((prev) => {
+          if (files[prev] !== undefined) return prev;
+          return serverActiveFile || Object.keys(files)[0] || "";
+        });
       });
+
       socketRef.current.on(ACTIONS.FILE_CHANGE, ({ fileName, newCode }) => {
         setFiles((prevFiles) => ({
           ...prevFiles,
           [fileName]: newCode,
         }));
       });
+
+      socketRef.current.on(ACTIONS.CODE_RUN, ({ result }) => {
+        setIsCompiling(false);
+        setOutput(result || "No output");
+      });
+
+      socketRef.current.on(ACTIONS.RECEIVE_MESSAGE, (message) => {
+        setMessages((prev) => [...prev, message]);
+      });
+
+      socketRef.current.on(ACTIONS.CURSOR_MOVE, ({ cursor, username, socketId }) => {
+        setOtherCursors((prev) => ({
+          ...prev,
+          [socketId]: { cursor, username },
+        }));
+      });
+
       socketRef.current.on(ACTIONS.DISCONNECTED, ({ username, socketId }) => {
         toast.success(`${username} left the room.`);
-        setClients((prev) => {
-          return prev.filter((client) => client.socketId !== socketId);
+        setClients((prev) => prev.filter((c) => c.socketId !== socketId));
+        setOtherCursors((prev) => {
+          const newState = { ...prev };
+          delete newState[socketId];
+          return newState;
         });
       });
     };
     init();
+
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -70,11 +106,29 @@ const EditorPage = () => {
         socketRef.current.off(ACTIONS.DISCONNECTED);
         socketRef.current.off(ACTIONS.FILES_SYNC);
         socketRef.current.off(ACTIONS.FILE_CHANGE);
+        socketRef.current.off(ACTIONS.CODE_RUN);
+        socketRef.current.off(ACTIONS.RECEIVE_MESSAGE);
+        socketRef.current.off(ACTIONS.CURSOR_MOVE);
       }
     };
-  }, []); // Note: leaving this empty as it appears to be the working configuration on your end.
+  }, [location.state?.username, reactNavigator, roomId]);
 
-  const handleFileSelect = (fileName) => setActiveFile(fileName);
+  const sendMessage = useCallback((text) => {
+    socketRef.current.emit(ACTIONS.SEND_MESSAGE, {
+      roomId,
+      text,
+      username: location.state?.username,
+    });
+  }, [roomId, location.state?.username]);
+
+  const handleCursorMove = useCallback((cursor) => {
+    socketRef.current.emit(ACTIONS.CURSOR_MOVE, {
+      roomId,
+      cursor,
+      username: location.state?.username,
+    });
+  }, [roomId, location.state?.username]);
+
 
   const handleNewFile = (fileName) => {
     if (files[fileName] !== undefined) {
@@ -103,16 +157,41 @@ const EditorPage = () => {
   };
   // =======================================================================
 
-  const handleCodeChange = (newCode) => {
+  const handleCodeChange = useCallback((newCode) => {
     if (activeFile) {
+      // Update local state immediately for responsiveness
       setFiles((prev) => ({ ...prev, [activeFile]: newCode }));
-      socketRef.current.emit(ACTIONS.FILE_CHANGE, {
-        roomId,
-        fileName: activeFile,
-        newCode,
-      });
+      setIsSaving(true);
+
+      // Debounce the socket emission
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(() => {
+        socketRef.current.emit(ACTIONS.FILE_CHANGE, {
+          roomId,
+          fileName: activeFile,
+          newCode,
+        });
+        setIsSaving(false);
+      }, 600); // 600ms debounce
     }
-  };
+  }, [activeFile, roomId]);
+
+  const runCode = useCallback(() => {
+    if (!activeFile || files[activeFile] === undefined) {
+      toast.error("Please select a file to run");
+      return;
+    }
+    setIsCompiling(true);
+    setOutput("Compiling and running " + activeFile + "...");
+    socketRef.current.emit(ACTIONS.CODE_RUN, {
+      roomId,
+      fileName: activeFile,
+      code: files[activeFile] || "",
+    });
+  }, [activeFile, files, roomId]);
 
   async function copyRoomId() {
     try {
@@ -138,7 +217,10 @@ const EditorPage = () => {
           <div className="logo">
             <img className="logoImage" src="/code-sync.png" alt="logo" />
           </div>
-          <h3>Connected</h3>
+          <div className="statusContainer">
+            <h3>Connected</h3>
+            {isSaving && <span className="savingIndicator">Saving...</span>}
+          </div>
           <div className="clientsList">
             {clients.map((client) => (
               <Client key={client.socketId} username={client.username} />
@@ -146,13 +228,16 @@ const EditorPage = () => {
           </div>
           <FileSidebar
             files={Object.keys(files)}
-            onFileSelect={handleFileSelect}
+            onFileSelect={(name) => setActiveFile(name)}
             onNewFile={handleNewFile}
             onFileDelete={handleDeleteFile}
-            onFileRename={handleFileRename} // <-- NEW PROP
+            onFileRename={handleFileRename}
             activeFile={activeFile}
           />
         </div>
+        <button className="btn chatToggleBtn" onClick={() => setShowChat(!showChat)}>
+          {showChat ? "Hide Chat" : "Show Chat"}
+        </button>
         <button className="btn copyBtn" onClick={copyRoomId}>
           Copy ROOM ID
         </button>
@@ -165,8 +250,21 @@ const EditorPage = () => {
           activeFile={activeFile}
           code={files[activeFile]}
           onCodeChange={handleCodeChange}
+          onRunCode={runCode}
+          onClearOutput={() => setOutput("")}
+          output={output}
+          isCompiling={isCompiling}
+          onCursorMove={handleCursorMove}
+          otherCursors={otherCursors}
         />
       </div>
+      {showChat && (
+        <Chat 
+          messages={messages} 
+          onSendMessage={sendMessage} 
+          username={location.state?.username} 
+        />
+      )}
     </div>
   );
 };
