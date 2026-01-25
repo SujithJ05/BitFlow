@@ -1,4 +1,39 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
+import { 
+  VscNewFile, 
+  VscNewFolder, 
+  VscChevronRight, 
+  VscChevronDown, 
+  VscEdit, 
+  VscTrash
+} from "react-icons/vsc";
+import { 
+  SiJavascript, 
+  SiCss3, 
+  SiHtml5, 
+  SiJson, 
+  SiMarkdown 
+} from "react-icons/si";
+import { FaFile } from "react-icons/fa";
+
+const getFileIcon = (fileName) => {
+  const extension = fileName.split('.').pop().toLowerCase();
+  switch (extension) {
+    case 'js':
+    case 'jsx':
+      return <SiJavascript color="#f7df1e" />;
+    case 'css':
+      return <SiCss3 color="#264de4" />;
+    case 'html':
+      return <SiHtml5 color="#e34c26" />;
+    case 'json':
+      return <SiJson color="#cbcbcb" />;
+    case 'md':
+      return <SiMarkdown color="#ffffff" />;
+    default:
+      return <FaFile color="#888" />;
+  }
+};
 
 const FileSidebar = ({
   files,
@@ -8,25 +43,9 @@ const FileSidebar = ({
   onFileRename,
   activeFile,
 }) => {
-  const [menuData, setMenuData] = useState({
-    visible: false,
-    x: 0,
-    y: 0,
-    file: null,
-  });
   const [expandedFolders, setExpandedFolders] = useState({ "/": true });
-  const sidebarRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = () => {
-      if (menuData.visible) {
-        setMenuData({ visible: false, x: 0, y: 0, file: null });
-      }
-    };
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, [menuData.visible]);
-
+  const [hoveredItem, setHoveredItem] = useState(null);
+  
   // Convert flat file list to a tree structure
   const buildFileTree = (fileList) => {
     const root = { name: "root", type: "folder", children: {}, path: "" };
@@ -61,13 +80,37 @@ const FileSidebar = ({
     const name = prompt(`Enter new ${isFolder ? "folder" : "file"} name (use / for paths):`);
     if (name && name.trim() !== "") {
       const path = name.trim();
-      // If it's a folder, we create a placeholder file to keep it in the list
-      // Or just let the user type 'folder/file.js'
       onNewFile(isFolder ? `${path}/.keep` : path);
     }
   };
 
-  const renderTree = (node) => {
+  const handleRename = (path, currentName, e) => {
+    e.stopPropagation();
+    const newName = prompt("Rename to:", currentName);
+    if (newName && newName !== currentName) {
+      const parts = path.split('/');
+      parts.pop();
+      const parentPath = parts.join('/');
+      // If it's a file at root, parentPath is empty.
+      // We need to reconstruct the full path for the new file.
+      // Note: The current prop onFileRename expects (oldPath, newPath).
+      // However, usually we just want to rename the filename part.
+      // The socket event handler seems to expect full paths.
+      // Let's assume the user enters just the new name, not the full path.
+      
+      const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+      onFileRename(path, newPath);
+    }
+  };
+
+  const handleDelete = (path, e) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete ${path}?`)) {
+      onFileDelete(path);
+    }
+  };
+
+  const renderTree = (node, depth = 0) => {
     const sortedChildren = Object.values(node.children).sort((a, b) => {
       if (a.type === b.type) return a.name.localeCompare(b.name);
       return a.type === "folder" ? -1 : 1;
@@ -78,29 +121,47 @@ const FileSidebar = ({
         {sortedChildren.map((item) => {
           if (item.name === ".keep") return null;
           const isExpanded = expandedFolders[item.path];
+          const isSelected = item.path === activeFile;
           
           return (
             <li key={item.path} className="treeItem">
               <div 
-                className={`treeLabel ${item.type} ${item.path === activeFile ? "active" : ""}`}
+                className={`treeLabel ${isSelected ? "active" : ""}`}
+                style={{ paddingLeft: `${depth * 10 + 10}px` }}
                 onClick={() => item.type === "file" ? onFileSelect(item.path) : toggleFolder(item.path, { stopPropagation: () => {} })}
+                onMouseEnter={() => setHoveredItem(item.path)}
+                onMouseLeave={() => setHoveredItem(null)}
               >
                 <span className="treeIcon" onClick={(e) => item.type === "folder" && toggleFolder(item.path, e)}>
-                  {item.type === "folder" ? (isExpanded ? "📂" : "📁") : "📄"}
+                  {item.type === "folder" ? (
+                    isExpanded ? <VscChevronDown /> : <VscChevronRight />
+                  ) : (
+                    getFileIcon(item.name)
+                  )}
                 </span>
+                
                 <span className="itemName">{item.name}</span>
-                <button
-                  className="btn menuButton"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setMenuData({ visible: true, x: rect.left - 80, y: rect.top + 20, file: item.path });
-                  }}
-                >
-                  ⋮
-                </button>
+                
+                {hoveredItem === item.path && (
+                  <div className="itemActions">
+                    <button 
+                      className="actionBtn" 
+                      title="Rename"
+                      onClick={(e) => handleRename(item.path, item.name, e)}
+                    >
+                      <VscEdit />
+                    </button>
+                    <button 
+                      className="actionBtn delete" 
+                      title="Delete"
+                      onClick={(e) => handleDelete(item.path, e)}
+                    >
+                      <VscTrash />
+                    </button>
+                  </div>
+                )}
               </div>
-              {item.type === "folder" && isExpanded && renderTree(item)}
+              {item.type === "folder" && isExpanded && renderTree(item, depth + 1)}
             </li>
           );
         })}
@@ -111,27 +172,17 @@ const FileSidebar = ({
   const tree = buildFileTree(files);
 
   return (
-    <div className="fileManager" ref={sidebarRef}>
+    <div className="fileManager">
       <div className="fileManagerHeader">
-        <h3 className="fileManagerTitle">Explorer</h3>
+        <h3 className="fileManagerTitle">EXPLORER</h3>
         <div className="fileActions">
-          <button onClick={() => handleNewItem(false)} title="New File">📄+</button>
-          <button onClick={() => handleNewItem(true)} title="New Folder">📁+</button>
+          <button onClick={() => handleNewItem(false)} title="New File"><VscNewFile /></button>
+          <button onClick={() => handleNewItem(true)} title="New Folder"><VscNewFolder /></button>
         </div>
       </div>
       <div className="treeContainer">
         {renderTree(tree)}
       </div>
-
-      {menuData.visible && (
-        <div
-          className="fileMenu"
-          style={{ top: `${menuData.y}px`, left: `${menuData.x}px` }}
-        >
-          <button onClick={() => onFileRename(menuData.file, prompt("New name:", menuData.file))}>Rename</button>
-          <button className="deleteOption" onClick={() => onFileDelete(menuData.file)}>Delete</button>
-        </div>
-      )}
     </div>
   );
 };

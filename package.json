@@ -9,17 +9,22 @@
     "axios": "^1.13.2",
     "codemirror": "^5.65.2",
     "express": "^5.1.0",
+    "lib0": "^0.2.117",
     "mongoose": "^9.1.4",
     "react": "18",
     "react-avatar": "^4.0.0",
     "react-dom": "18",
     "react-hot-toast": "^2.5.2",
+    "react-icons": "^5.5.0",
     "react-router-dom": "^7.6.2",
     "react-scripts": "5.0.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "uuid": "^11.1.0",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "y-codemirror": "^3.0.1",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.29"
   },
   "scripts": {
     "start:front": "react-scripts start",
@@ -27,6 +32,7 @@
     "build": "react-scripts build",
     "server:dev": "nodemon server.js",
     "server:prod": "node server.js",
+    "lint": "eslint src",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

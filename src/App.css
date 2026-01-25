@@ -274,173 +274,152 @@ footer a:hover {
 
 /* --- FILE MANAGER & FILE LIST STYLES --- */
 .fileManager {
-  margin-top: 20px;
+  margin-top: 10px;
   margin-bottom: 20px;
-  border-top: 1px solid #424242;
-  padding-top: 10px;
-}
-
-.fileManagerTitle {
-  margin: 0 0 10px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .fileManagerHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  padding: 0 10px 5px 10px;
+  margin-bottom: 5px;
+}
+
+.fileManagerTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #bbbbbb;
+}
+
+.fileActions {
+  display: flex;
+  gap: 4px;
 }
 
 .fileActions button {
   background: transparent;
   border: none;
-  color: #888;
+  color: #cccccc;
   cursor: pointer;
-  font-size: 16px;
-  margin-left: 5px;
+  font-size: 14px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
 }
 
 .fileActions button:hover {
-  color: #4aed88;
+  background-color: #3d3d4e;
+  color: #fff;
 }
 
 .treeContainer {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
 }
 
 .fileTreeList {
   list-style: none;
-  padding-left: 15px;
+  padding: 0;
   margin: 0;
 }
 
 .treeItem {
-  margin: 2px 0;
+  margin: 0;
 }
 
 .treeLabel {
   display: flex;
   align-items: center;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 3px 0;
   cursor: pointer;
-  transition: background 0.2s;
-  position: relative;
+  color: #cccccc;
+  font-size: 13px;
+  border-left: 2px solid transparent;
+  transition: background-color 0.1s;
+  height: 24px; /* Fixed height for consistency */
 }
 
 .treeLabel:hover {
-  background: #3d3d4e;
+  background-color: #2a2d3e;
+  color: #fff;
 }
 
 .treeLabel.active {
-  background: #4aed88;
-  color: #000;
+  background-color: #37373d;
+  color: #fff;
+  border-left-color: #4aed88;
 }
 
 .treeIcon {
-  margin-right: 8px;
-  font-size: 14px;
-  width: 18px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  font-size: 14px; /* Icon size */
+  width: 16px;
 }
 
 .itemName {
   flex: 1;
-  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.treeLabel.active .menuButton {
-  color: #000;
-}
-
-.treeLabel.active .itemName {
-  font-weight: bold;
-}
-
-.newFileBtn {
-  width: 100%;
-  padding: 10px;
-  background-color: #282a36;
-  border: 1px solid #4aed88;
-  color: #4aed88;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: background-color 0.2s, color 0.2s;
-  margin-top: 10px;
-}
-
-.newFileBtn:hover {
-  background-color: #4aed88;
-  color: #000;
-}
-
-/* ================== NEW STYLES FOR THE FILE MENU ================== */
-/* This replaces all old menu and delete button styles. */
-.fileName {
-  flex-grow: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   padding-right: 5px;
 }
 
-.menuButton {
-  background: none;
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  padding: 0 5px;
-  flex-shrink: 0; /* Prevent the button from shrinking on small screens */
-}
-
-.fileItem.active .menuButton {
-  color: #000;
-}
-
-.fileMenu {
-  position: fixed; /* Use fixed positioning to float above everything */
-  background-color: #3d3d4e;
-  border: 1px solid #525561;
-  border-radius: 5px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  z-index: 1000; /* High z-index to ensure it is always on top */
-  padding: 5px;
-  width: 100px;
+/* Hover Actions (Rename/Delete) */
+.itemActions {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  margin-right: 5px;
 }
 
-.fileMenu button {
-  background: none;
+.actionBtn {
+  background: transparent;
   border: none;
-  color: #fff;
-  text-align: left;
-  padding: 8px 12px;
-  border-radius: 3px;
+  color: #bbbbbb;
   cursor: pointer;
-  width: 100%;
+  font-size: 12px;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
 }
 
-.fileMenu button:hover {
-  background-color: #525561;
+.actionBtn:hover {
+  color: #fff;
+  background-color: #444;
 }
 
-.fileMenu button.deleteOption {
+.actionBtn.delete:hover {
   color: #ff5555;
 }
 
-.fileMenu button.deleteOption:hover {
-  background-color: #525561;
-  color: #ff8080;
+/* Scrollbar for tree container */
+.treeContainer::-webkit-scrollbar {
+  width: 8px;
 }
-/* ================================================================= */
+.treeContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
+.treeContainer::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+.treeContainer::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
 
 /* --- SIDEBAR BUTTONS --- */
 .copyBtn {

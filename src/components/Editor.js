@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import Codemirror from "codemirror";
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import { CodemirrorBinding } from "y-codemirror";
 import "codemirror/lib/codemirror.css";
 import "codemirror/theme/dracula.css";
 import "codemirror/theme/material.css";
@@ -13,19 +16,20 @@ import "codemirror/addon/edit/closetag";
 import "codemirror/addon/edit/closebrackets";
 
 const Editor = ({ 
+  roomId,
   activeFile, 
-  code, 
   onCodeChange, 
   onRunCode, 
   output, 
   isCompiling,
-  onCursorMove,
-  otherCursors,
-  onClearOutput
+  onClearOutput,
+  username
 }) => {
   const editorRef = useRef(null);
   const textAreaRef = useRef(null);
-  const markersRef = useRef({});
+  const bindingRef = useRef(null);
+  const docRef = useRef(null);
+  const providerRef = useRef(null);
   const [theme, setTheme] = useState("dracula");
 
   useEffect(() => {
@@ -43,17 +47,6 @@ const Editor = ({
         }
       });
       editorRef.current = editor;
-
-      editor.on("change", (instance, changes) => {
-        if (changes.origin !== "setValue") {
-          onCodeChange(instance.getValue());
-        }
-      });
-
-      editor.on("cursorActivity", (instance) => {
-        const cursor = instance.getCursor();
-        onCursorMove(cursor);
-      });
     }
 
     return () => {
@@ -61,17 +54,66 @@ const Editor = ({
         editorRef.current.toTextArea();
         editorRef.current = null;
       }
+      if (bindingRef.current) {
+        bindingRef.current.destroy();
+      }
+      if (providerRef.current) {
+        providerRef.current.destroy();
+      }
+      if (docRef.current) {
+        docRef.current.destroy();
+      }
     };
-  }, [onCodeChange, onCursorMove, theme]);
+  }, [theme]);
 
-  // Handle content and mode updates
+  // Handle Collaborative Sync
+  useEffect(() => {
+    if (!editorRef.current || !activeFile || !roomId) return;
+
+    // Cleanup previous binding
+    if (bindingRef.current) {
+        bindingRef.current.destroy();
+    }
+    if (providerRef.current) {
+        providerRef.current.destroy();
+    }
+    if (docRef.current) {
+        docRef.current.destroy();
+    }
+
+    const ydoc = new Y.Doc();
+    docRef.current = ydoc;
+
+    // Connect to a public y-websocket server (or your own if hosted)
+    // For local dev, you can use ws://localhost:1234
+    // We'll use a unique room name per file in the project
+    const provider = new WebsocketProvider(
+        'wss://demos.yjs.dev', // Replace with your production websocket server
+        `${roomId}-${activeFile}`, 
+        ydoc
+    );
+    providerRef.current = provider;
+
+    const awareness = provider.awareness;
+    awareness.setLocalStateField('user', {
+        name: username,
+        color: stringToColor(username)
+    });
+
+    const ytext = ydoc.getText('codemirror');
+    const binding = new CodemirrorBinding(ytext, editorRef.current, awareness);
+    bindingRef.current = binding;
+
+    // Observe changes to notify parent component if needed (e.g. for saving)
+    ytext.observe(() => {
+        onCodeChange(ytext.toString());
+    });
+
+  }, [activeFile, roomId, username, onCodeChange]);
+
+  // Handle mode updates
   useEffect(() => {
     if (editorRef.current) {
-      const currentCode = editorRef.current.getValue();
-      if (code !== undefined && code !== currentCode) {
-        editorRef.current.setValue(code || "");
-      }
-
       const extension = activeFile ? activeFile.split(".").pop().toLowerCase() : "js";
       let mode = "javascript";
       if (extension === "css") mode = "css";
@@ -85,36 +127,9 @@ const Editor = ({
         editorRef.current.setOption("mode", mode);
       }
     }
-  }, [code, activeFile]);
+  }, [activeFile]);
 
-  // Update Remote Cursors
-  useEffect(() => {
-    if (editorRef.current) {
-      // Clear old markers
-      Object.values(markersRef.current).forEach(marker => marker.clear());
-      markersRef.current = {};
-
-      // Set new markers for each user
-      Object.entries(otherCursors).forEach(([socketId, data]) => {
-        const { cursor, username } = data;
-        const cursorElement = document.createElement("div");
-        cursorElement.className = "remote-cursor";
-        cursorElement.style.borderLeft = `2px solid ${stringToColor(username)}`;
-        
-        const label = document.createElement("div");
-        label.className = "cursor-label";
-        label.innerText = username;
-        label.style.backgroundColor = stringToColor(username);
-        cursorElement.appendChild(label);
-
-        markersRef.current[socketId] = editorRef.current.setBookmark(cursor, {
-          widget: cursorElement
-        });
-      });
-    }
-  }, [otherCursors]);
-
-  const stringToColor = (str) => {
+  function stringToColor(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -135,7 +150,6 @@ const Editor = ({
             value={theme} 
             onChange={(e) => {
               setTheme(e.target.value);
-              editorRef.current.setOption("theme", e.target.value);
             }}
           >
             <option value="dracula">Dracula</option>
@@ -153,16 +167,6 @@ const Editor = ({
             navigator.clipboard.writeText(editorRef.current.getValue());
           }} title="Copy Code">
             Copy
-          </button>
-          <button className="headerBtn" onClick={() => {
-            const element = document.createElement("a");
-            const file = new Blob([editorRef.current.getValue()], {type: 'text/plain'});
-            element.href = URL.createObjectURL(file);
-            element.download = activeFile || "code.txt";
-            document.body.appendChild(element);
-            element.click();
-          }} title="Download File">
-            Download
           </button>
         </div>
       </div>

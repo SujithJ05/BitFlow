@@ -26,7 +26,6 @@ const EditorPage = () => {
   const [output, setOutput] = useState("");
   const [isCompiling, setIsCompiling] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [otherCursors, setOtherCursors] = useState({});
   const [showChat, setShowChat] = useState(false);
   const saveTimeoutRef = useRef(null);
 
@@ -80,21 +79,9 @@ const EditorPage = () => {
         setMessages((prev) => [...prev, message]);
       });
 
-      socketRef.current.on(ACTIONS.CURSOR_MOVE, ({ cursor, username, socketId }) => {
-        setOtherCursors((prev) => ({
-          ...prev,
-          [socketId]: { cursor, username },
-        }));
-      });
-
       socketRef.current.on(ACTIONS.DISCONNECTED, ({ username, socketId }) => {
         toast.success(`${username} left the room.`);
         setClients((prev) => prev.filter((c) => c.socketId !== socketId));
-        setOtherCursors((prev) => {
-          const newState = { ...prev };
-          delete newState[socketId];
-          return newState;
-        });
       });
     };
     init();
@@ -108,7 +95,6 @@ const EditorPage = () => {
         socketRef.current.off(ACTIONS.FILE_CHANGE);
         socketRef.current.off(ACTIONS.CODE_RUN);
         socketRef.current.off(ACTIONS.RECEIVE_MESSAGE);
-        socketRef.current.off(ACTIONS.CURSOR_MOVE);
       }
     };
   }, [location.state?.username, reactNavigator, roomId]);
@@ -117,14 +103,6 @@ const EditorPage = () => {
     socketRef.current.emit(ACTIONS.SEND_MESSAGE, {
       roomId,
       text,
-      username: location.state?.username,
-    });
-  }, [roomId, location.state?.username]);
-
-  const handleCursorMove = useCallback((cursor) => {
-    socketRef.current.emit(ACTIONS.CURSOR_MOVE, {
-      roomId,
-      cursor,
       username: location.state?.username,
     });
   }, [roomId, location.state?.username]);
@@ -247,15 +225,14 @@ const EditorPage = () => {
       </div>
       <div className="editorWrap">
         <Editor
+          roomId={roomId}
           activeFile={activeFile}
-          code={files[activeFile]}
           onCodeChange={handleCodeChange}
           onRunCode={runCode}
           onClearOutput={() => setOutput("")}
           output={output}
           isCompiling={isCompiling}
-          onCursorMove={handleCursorMove}
-          otherCursors={otherCursors}
+          username={location.state?.username}
         />
       </div>
       {showChat && (
